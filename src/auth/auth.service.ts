@@ -12,19 +12,25 @@ export interface AuthResponse {
 @Injectable()
 export class AuthService {
   private readonly authServiceUrl: string;
+  private readonly verifyPath: string;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.authServiceUrl = this.configService.get<string>('AUTH_SERVICE_URL') || 'http://localhost:3001';
+    this.authServiceUrl =
+      this.configService.get<string>('AUTH_SERVICE_URL') ||
+      'http://iamauth.runasp.net';
+    this.verifyPath =
+      this.configService.get<string>('AUTH_VERIFY_PATH') ||
+      '/api/ticket/verify';
   }
 
   async verifySecretKey(secretKey: string): Promise<AuthResponse> {
     try {
       const response = await firstValueFrom(
         this.httpService.post<AuthResponse>(
-          `${this.authServiceUrl}/verify`,
+          `${this.authServiceUrl.replace(/\/$/, '')}${this.verifyPath}`,
           {},
           {
             headers: {
