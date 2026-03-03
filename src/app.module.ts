@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { MeetingsModule } from './meetings/meetings.module';
 import { PermissionsModule } from './permissions/permissions.module';
+import { SystemModule } from './system/system.module';
 import { AuthGuard } from './auth/auth.guard';
 import { ServiceTicketMiddleware } from './common/middleware/service-ticket.middleware';
 
@@ -19,6 +20,7 @@ import { ServiceTicketMiddleware } from './common/middleware/service-ticket.midd
     AuthModule,
     MeetingsModule,
     PermissionsModule,
+    SystemModule,
   ],
   providers: [
     {
