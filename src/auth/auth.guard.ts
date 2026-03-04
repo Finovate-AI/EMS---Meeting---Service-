@@ -27,8 +27,14 @@ export class AuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const path = request.url;
 
-    // Skip authentication for Swagger UI paths
-    if (path.startsWith('/api') && !path.startsWith('/api/meetings')) {
+    // Skip authentication for:
+    // - Swagger UI paths (/api, /api-json, etc.) but NOT /api/meetings
+    // - Public utility endpoints: /permissions and /system
+    if (
+      (path.startsWith('/api') && !path.startsWith('/api/meetings')) ||
+      path.startsWith('/permissions') ||
+      path.startsWith('/system')
+    ) {
       return true;
     }
 
