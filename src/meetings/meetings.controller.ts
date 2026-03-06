@@ -27,10 +27,9 @@ import {
   UpdateParticipantDto,
   MeetingResponseDto,
 } from './dto';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('meetings')
-@ApiSecurity('x-secret-key')
+@ApiSecurity('x-service-ticket')
 @Controller('meetings')
 export class MeetingsController {
   constructor(private readonly meetingsService: MeetingsService) {}
@@ -64,11 +63,8 @@ export class MeetingsController {
       },
     },
   })
-  async create(
-    @Body() createMeetingDto: CreateMeetingDto,
-    @CurrentUser() user: { userId: string },
-  ): Promise<MeetingResponseDto> {
-    return this.meetingsService.create(createMeetingDto, user.userId);
+  async create(@Body() createMeetingDto: CreateMeetingDto): Promise<MeetingResponseDto> {
+    return this.meetingsService.create(createMeetingDto);
   }
 
   @Get()
@@ -79,11 +75,8 @@ export class MeetingsController {
   @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'SCHEDULED', 'CANCELLED'], description: 'Filter by meeting status' })
   @ApiResponse({ status: 200, description: 'List of meetings', type: [MeetingResponseDto] })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findAll(
-    @CurrentUser() user: { userId: string },
-    @Query('status') status?: string,
-  ): Promise<MeetingResponseDto[]> {
-    return this.meetingsService.findAll(user.userId, status);
+  async findAll(@Query('status') status?: string): Promise<MeetingResponseDto[]> {
+    return this.meetingsService.findAll(status);
   }
 
   @Get(':id/participants')
@@ -96,11 +89,8 @@ export class MeetingsController {
   @ApiResponse({ status: 403, description: 'No access to this meeting' })
   @ApiResponse({ status: 404, description: 'Meeting not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getParticipants(
-    @Param('id') id: string,
-    @CurrentUser() user: { userId: string },
-  ) {
-    return this.meetingsService.getParticipants(id, user.userId);
+  async getParticipants(@Param('id') id: string) {
+    return this.meetingsService.getParticipants(id);
   }
 
   @Get(':id')
@@ -113,11 +103,8 @@ export class MeetingsController {
   @ApiResponse({ status: 404, description: 'Meeting not found' })
   @ApiResponse({ status: 403, description: 'No access to this meeting' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: { userId: string },
-  ): Promise<MeetingResponseDto> {
-    return this.meetingsService.findOne(id, user.userId);
+  async findOne(@Param('id') id: string): Promise<MeetingResponseDto> {
+    return this.meetingsService.findOne(id);
   }
 
   @Patch(':id')
@@ -137,9 +124,8 @@ export class MeetingsController {
   async update(
     @Param('id') id: string,
     @Body() updateMeetingDto: UpdateMeetingDto,
-    @CurrentUser() user: { userId: string },
   ): Promise<MeetingResponseDto> {
-    return this.meetingsService.update(id, updateMeetingDto, user.userId);
+    return this.meetingsService.update(id, updateMeetingDto);
   }
 
   @Delete(':id')
@@ -153,11 +139,8 @@ export class MeetingsController {
   @ApiResponse({ status: 403, description: 'Only organizers can delete' })
   @ApiResponse({ status: 404, description: 'Meeting not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async remove(
-    @Param('id') id: string,
-    @CurrentUser() user: { userId: string },
-  ): Promise<void> {
-    return this.meetingsService.remove(id, user.userId);
+  async remove(@Param('id') id: string): Promise<void> {
+    return this.meetingsService.remove(id);
   }
 
   @Post(':id/cancel')
@@ -172,11 +155,8 @@ export class MeetingsController {
   @ApiResponse({ status: 404, description: 'Meeting not found' })
   @ApiResponse({ status: 400, description: 'Meeting already cancelled' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async cancel(
-    @Param('id') id: string,
-    @CurrentUser() user: { userId: string },
-  ): Promise<MeetingResponseDto> {
-    return this.meetingsService.cancel(id, user.userId);
+  async cancel(@Param('id') id: string): Promise<MeetingResponseDto> {
+    return this.meetingsService.cancel(id);
   }
 
   @Post(':id/participants')
@@ -194,9 +174,8 @@ export class MeetingsController {
   async addParticipant(
     @Param('id') id: string,
     @Body() addParticipantDto: AddParticipantDto,
-    @CurrentUser() user: { userId: string },
   ): Promise<MeetingResponseDto> {
-    return this.meetingsService.addParticipant(id, addParticipantDto, user.userId);
+    return this.meetingsService.addParticipant(id, addParticipantDto);
   }
 
   @Patch(':id/participants/:participantId')
@@ -222,13 +201,11 @@ export class MeetingsController {
     @Param('id') id: string,
     @Param('participantId') participantId: string,
     @Body() updateParticipantDto: UpdateParticipantDto,
-    @CurrentUser() user: { userId: string },
   ): Promise<MeetingResponseDto> {
     return this.meetingsService.updateParticipant(
       id,
       participantId,
       updateParticipantDto,
-      user.userId,
     );
   }
 
@@ -247,8 +224,7 @@ export class MeetingsController {
   async removeParticipant(
     @Param('id') id: string,
     @Param('participantId') participantId: string,
-    @CurrentUser() user: { userId: string },
   ): Promise<void> {
-    return this.meetingsService.removeParticipant(id, participantId, user.userId);
+    return this.meetingsService.removeParticipant(id, participantId);
   }
 }

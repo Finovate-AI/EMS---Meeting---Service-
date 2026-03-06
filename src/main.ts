@@ -14,23 +14,22 @@ async function bootstrap() {
     }),
   );
 
-  // Swagger configuration
   const config = new DocumentBuilder()
     .setTitle('Meeting Service API')
     .setDescription(
       'REST API for managing meetings in a microservices architecture. ' +
-      'Create meetings, add participants and organizers, manage agenda items, meeting minutes, and action items. ' +
-      'All endpoints (except Swagger UI) require the **x-secret-key** header for authentication via Auth Service.',
+      'Create meetings, add participants and organizers, manage agenda items, meeting minutes, and action items.',
     )
     .setVersion('1.0')
     .addApiKey(
       {
         type: 'apiKey',
-        name: 'x-secret-key',
+        name: 'X-Service-Ticket',
         in: 'header',
-        description: 'Secret key for authentication. Obtain from Auth Service. Required for all /meetings endpoints.',
+        description:
+          'Service ticket issued by Authentication Gateway (sent as X-Service-Ticket header).',
       },
-      'x-secret-key',
+      'x-service-ticket',
     )
     .addTag('meetings', 'Create, read, update, and manage meetings. Organizers can update/cancel; participants can respond to invitations.')
     .build();

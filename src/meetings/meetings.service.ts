@@ -30,19 +30,19 @@ export class MeetingsService {
     private readonly zoomService: ZoomService,
   ) {}
 
-  async create(createMeetingDto: CreateMeetingDto, userId: string): Promise<MeetingResponseDto> {
+  async create(createMeetingDto: CreateMeetingDto): Promise<MeetingResponseDto> {
     const { participants, organizers, ...meetingData } = createMeetingDto;
 
-    // Ensure creator is added as organizer if not specified
+    // Ensure at least one organizer exists (no auth, so we don't track current user)
     const meetingOrganizers = organizers || [];
-    if (!meetingOrganizers.some((o) => o.userId === userId)) {
-      meetingOrganizers.push({ userId });
+    if (meetingOrganizers.length === 0) {
+      meetingOrganizers.push({ userId: 'system' });
     }
 
     const meeting = await this.prisma.meeting.create({
       data: {
         ...meetingData,
-        createdBy: userId,
+        createdBy: 'system',
         status: meetingData.status || 'DRAFT',
         participants: participants
           ? {
@@ -117,14 +117,8 @@ export class MeetingsService {
     return this.mapToResponseDto(meeting);
   }
 
-  async findAll(userId: string, status?: string): Promise<MeetingResponseDto[]> {
-    const where: any = {
-      OR: [
-        { createdBy: userId },
-        { participants: { some: { userId } } },
-        { organizers: { some: { userId } } },
-      ],
-    };
+  async findAll(status?: string): Promise<MeetingResponseDto[]> {
+    const where: any = {};
     if (status && ['DRAFT', 'SCHEDULED', 'CANCELLED'].includes(status)) {
       where.status = status;
     }
@@ -145,7 +139,7 @@ export class MeetingsService {
     return meetings.map((meeting) => this.mapToResponseDto(meeting));
   }
 
-  async findOne(id: string, userId: string): Promise<MeetingResponseDto> {
+  async findOne(id: string): Promise<MeetingResponseDto> {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id },
       include: {
@@ -161,23 +155,12 @@ export class MeetingsService {
       throw new NotFoundException(`Meeting with ID ${id} not found`);
     }
 
-    // Check if user has access to this meeting
-    const hasAccess =
-      meeting.createdBy === userId ||
-      meeting.participants.some((p) => p.userId === userId) ||
-      meeting.organizers.some((o) => o.userId === userId);
-
-    if (!hasAccess) {
-      throw new ForbiddenException('You do not have access to this meeting');
-    }
-
     return this.mapToResponseDto(meeting);
   }
 
   async update(
     id: string,
     updateMeetingDto: UpdateMeetingDto,
-    userId: string,
   ): Promise<MeetingResponseDto> {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id },
@@ -186,12 +169,6 @@ export class MeetingsService {
 
     if (!meeting) {
       throw new NotFoundException(`Meeting with ID ${id} not found`);
-    }
-
-    // Only organizers can update meetings
-    const isOrganizer = meeting.organizers.some((o) => o.userId === userId);
-    if (!isOrganizer) {
-      throw new ForbiddenException('Only meeting organizers can update meetings');
     }
 
     // Check if status is being changed to SCHEDULED and meeting doesn't have Zoom meeting yet
@@ -266,7 +243,7 @@ export class MeetingsService {
     return this.mapToResponseDto(updatedMeeting);
   }
 
-  async cancel(id: string, userId: string): Promise<MeetingResponseDto> {
+  async cancel(id: string): Promise<MeetingResponseDto> {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id },
       include: { organizers: true },
@@ -274,12 +251,6 @@ export class MeetingsService {
 
     if (!meeting) {
       throw new NotFoundException(`Meeting with ID ${id} not found`);
-    }
-
-    // Only organizers can cancel meetings
-    const isOrganizer = meeting.organizers.some((o) => o.userId === userId);
-    if (!isOrganizer) {
-      throw new ForbiddenException('Only meeting organizers can cancel meetings');
     }
 
     if (meeting.status === 'CANCELLED') {
@@ -304,7 +275,6 @@ export class MeetingsService {
   async addParticipant(
     meetingId: string,
     addParticipantDto: AddParticipantDto,
-    userId: string,
   ): Promise<MeetingResponseDto> {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: meetingId },
@@ -313,12 +283,6 @@ export class MeetingsService {
 
     if (!meeting) {
       throw new NotFoundException(`Meeting with ID ${meetingId} not found`);
-    }
-
-    // Only organizers can add participants
-    const isOrganizer = meeting.organizers.some((o) => o.userId === userId);
-    if (!isOrganizer) {
-      throw new ForbiddenException('Only meeting organizers can add participants');
     }
 
     // Check if participant already exists
@@ -342,14 +306,13 @@ export class MeetingsService {
       },
     });
 
-    return this.findOne(meetingId, userId);
+    return this.findOne(meetingId);
   }
 
   async updateParticipant(
     meetingId: string,
     participantId: string,
     updateParticipantDto: UpdateParticipantDto,
-    userId: string,
   ): Promise<MeetingResponseDto> {
     const participant = await this.prisma.meetingParticipant.findUnique({
       where: { id: participantId },
@@ -363,33 +326,21 @@ export class MeetingsService {
       throw new BadRequestException('Participant does not belong to this meeting');
     }
 
-    // Only the participant themselves can update their response
-    if (participant.userId !== userId) {
-      throw new ForbiddenException('You can only update your own participant response');
-    }
-
     await this.prisma.meetingParticipant.update({
       where: { id: participantId },
       data: updateParticipantDto,
     });
 
-    return this.findOne(meetingId, userId);
+    return this.findOne(meetingId);
   }
 
-  async getParticipants(meetingId: string, userId: string) {
+  async getParticipants(meetingId: string) {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: meetingId },
       include: { participants: true, organizers: true },
     });
     if (!meeting) {
       throw new NotFoundException(`Meeting with ID ${meetingId} not found`);
-    }
-    const hasAccess =
-      meeting.createdBy === userId ||
-      meeting.participants.some((p) => p.userId === userId) ||
-      meeting.organizers.some((o) => o.userId === userId);
-    if (!hasAccess) {
-      throw new ForbiddenException('You do not have access to this meeting');
     }
     return meeting.participants.map((p) => ({
       id: p.id,
@@ -404,7 +355,6 @@ export class MeetingsService {
   async removeParticipant(
     meetingId: string,
     participantId: string,
-    userId: string,
   ): Promise<void> {
     const participant = await this.prisma.meetingParticipant.findUnique({
       where: { id: participantId },
@@ -413,16 +363,12 @@ export class MeetingsService {
     if (!participant || participant.meetingId !== meetingId) {
       throw new NotFoundException('Participant not found');
     }
-    const isOrganizer = participant.meeting.organizers.some((o) => o.userId === userId);
-    if (!isOrganizer) {
-      throw new ForbiddenException('Only organizers can remove participants');
-    }
     await this.prisma.meetingParticipant.delete({
       where: { id: participantId },
     });
   }
 
-  async remove(id: string, userId: string): Promise<void> {
+  async remove(id: string): Promise<void> {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id },
       include: { organizers: true },
@@ -430,11 +376,6 @@ export class MeetingsService {
     if (!meeting) {
       throw new NotFoundException(`Meeting with ID ${id} not found`);
     }
-    const isOrganizer = meeting.organizers.some((o) => o.userId === userId);
-    if (!isOrganizer) {
-      throw new ForbiddenException('Only organizers can delete meetings');
-    }
-
     // Delete Zoom meeting if exists
     if (meeting.zoomMeetingId) {
       try {
