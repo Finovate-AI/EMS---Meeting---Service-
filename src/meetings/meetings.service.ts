@@ -11,7 +11,6 @@ import {
   CreateMeetingDto,
   UpdateMeetingDto,
   AddParticipantDto,
-  UpdateParticipantDto,
   MeetingResponseDto,
 } from './dto';
 // Enums converted to string constants for SQL Server compatibility
@@ -34,10 +33,17 @@ export class MeetingsService {
     return process.env.SERVICE_TICKET_USER_ID || 'system';
   }
 
-  async create(createMeetingDto: CreateMeetingDto): Promise<MeetingResponseDto> {
+  private resolveUserId(userId?: string): string {
+    return userId || this.getDefaultUserId();
+  }
+
+  async create(
+    createMeetingDto: CreateMeetingDto,
+    userId?: string,
+  ): Promise<MeetingResponseDto> {
     const { participants, organizers, ...meetingData } = createMeetingDto;
 
-    const defaultUserId = this.getDefaultUserId();
+    const defaultUserId = this.resolveUserId(userId);
 
     // Ensure at least one organizer exists (no auth, so we don't track current user)
     const meetingOrganizers = organizers || [];
@@ -54,6 +60,7 @@ export class MeetingsService {
           ? {
               create: participants.map((p) => ({
                 userId: p.userId,
+                response: 'ACCEPTED',
               })),
             }
           : undefined,
@@ -123,8 +130,13 @@ export class MeetingsService {
     return this.mapToResponseDto(meeting);
   }
 
-  async findAll(status?: string): Promise<MeetingResponseDto[]> {
-    const where: any = {};
+  async findAll(
+    status?: string,
+    userId?: string,
+  ): Promise<MeetingResponseDto[]> {
+    const where: any = {
+      createdBy: this.resolveUserId(userId),
+    };
     if (status && ['DRAFT', 'SCHEDULED', 'CANCELLED'].includes(status)) {
       where.status = status;
     }
@@ -145,9 +157,12 @@ export class MeetingsService {
     return meetings.map((meeting) => this.mapToResponseDto(meeting));
   }
 
-  async findOne(id: string): Promise<MeetingResponseDto> {
-    const meeting = await this.prisma.meeting.findUnique({
-      where: { id },
+  async findOne(id: string, userId?: string): Promise<MeetingResponseDto> {
+    const meeting = await this.prisma.meeting.findFirst({
+      where: {
+        id,
+        createdBy: this.resolveUserId(userId),
+      },
       include: {
         participants: true,
         organizers: true,
@@ -167,9 +182,10 @@ export class MeetingsService {
   async update(
     id: string,
     updateMeetingDto: UpdateMeetingDto,
+    userId?: string,
   ): Promise<MeetingResponseDto> {
-    const meeting = await this.prisma.meeting.findUnique({
-      where: { id },
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { id, createdBy: this.resolveUserId(userId) },
       include: { organizers: true },
     });
 
@@ -249,9 +265,9 @@ export class MeetingsService {
     return this.mapToResponseDto(updatedMeeting);
   }
 
-  async cancel(id: string): Promise<MeetingResponseDto> {
-    const meeting = await this.prisma.meeting.findUnique({
-      where: { id },
+  async cancel(id: string, userId?: string): Promise<MeetingResponseDto> {
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { id, createdBy: this.resolveUserId(userId) },
       include: { organizers: true },
     });
 
@@ -281,9 +297,10 @@ export class MeetingsService {
   async addParticipant(
     meetingId: string,
     addParticipantDto: AddParticipantDto,
+    userId?: string,
   ): Promise<MeetingResponseDto> {
     const meeting = await this.prisma.meeting.findUnique({
-      where: { id: meetingId },
+      where: { id: meetingId, createdBy: this.resolveUserId(userId) },
       include: { organizers: true },
     });
 
@@ -309,40 +326,16 @@ export class MeetingsService {
       data: {
         meetingId,
         userId: addParticipantDto.userId,
+        response: 'ACCEPTED',
       },
     });
 
     return this.findOne(meetingId);
   }
 
-  async updateParticipant(
-    meetingId: string,
-    participantId: string,
-    updateParticipantDto: UpdateParticipantDto,
-  ): Promise<MeetingResponseDto> {
-    const participant = await this.prisma.meetingParticipant.findUnique({
-      where: { id: participantId },
-    });
-
-    if (!participant) {
-      throw new NotFoundException(`Participant with ID ${participantId} not found`);
-    }
-
-    if (participant.meetingId !== meetingId) {
-      throw new BadRequestException('Participant does not belong to this meeting');
-    }
-
-    await this.prisma.meetingParticipant.update({
-      where: { id: participantId },
-      data: updateParticipantDto,
-    });
-
-    return this.findOne(meetingId);
-  }
-
-  async getParticipants(meetingId: string) {
-    const meeting = await this.prisma.meeting.findUnique({
-      where: { id: meetingId },
+  async getParticipants(meetingId: string, userId?: string) {
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { id: meetingId, createdBy: this.resolveUserId(userId) },
       include: { participants: true, organizers: true },
     });
     if (!meeting) {
@@ -352,7 +345,6 @@ export class MeetingsService {
       id: p.id,
       meetingId: p.meetingId,
       userId: p.userId,
-      response: p.response,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
     }));
@@ -361,12 +353,16 @@ export class MeetingsService {
   async removeParticipant(
     meetingId: string,
     participantId: string,
+    userId?: string,
   ): Promise<void> {
-    const participant = await this.prisma.meetingParticipant.findUnique({
-      where: { id: participantId },
-      include: { meeting: { include: { organizers: true } } },
+    const participant = await this.prisma.meetingParticipant.findFirst({
+      where: {
+        id: participantId,
+        meetingId,
+        meeting: { createdBy: this.resolveUserId(userId) },
+      },
     });
-    if (!participant || participant.meetingId !== meetingId) {
+    if (!participant) {
       throw new NotFoundException('Participant not found');
     }
     await this.prisma.meetingParticipant.delete({
@@ -374,9 +370,9 @@ export class MeetingsService {
     });
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, userId?: string): Promise<void> {
     const meeting = await this.prisma.meeting.findUnique({
-      where: { id },
+      where: { id, createdBy: this.resolveUserId(userId) },
       include: { organizers: true },
     });
     if (!meeting) {
@@ -417,7 +413,6 @@ export class MeetingsService {
         id: p.id,
         meetingId: p.meetingId,
         userId: p.userId,
-        response: p.response,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
       })),

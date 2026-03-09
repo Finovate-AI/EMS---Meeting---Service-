@@ -14,6 +14,10 @@ export const SERVICE_TICKET_HEADER = 'x-service-ticket';
 /** Attached to request after successful verification */
 export interface ServiceTicketRequest extends Request {
   serviceTicket?: string;
+  user?: {
+    id: string;
+    [key: string]: any;
+  };
 }
 
 function isExcludedPath(path: string): boolean {
@@ -47,7 +51,14 @@ export class ServiceTicketMiddleware implements NestMiddleware {
     // Master service ticket key (bypasses remote validation and does not expire)
     const masterKey = this.configService.get<string>('SERVICE_TICKET_KEY');
     if (masterKey && ticket === masterKey) {
-      (req as ServiceTicketRequest).serviceTicket = ticket;
+      const defaultUserId =
+        this.configService.get<string>('SERVICE_TICKET_USER_ID') || 'system';
+      const reqWithTicket = req as ServiceTicketRequest;
+      reqWithTicket.serviceTicket = ticket;
+      reqWithTicket.user = {
+        id: defaultUserId,
+        isMasterTicket: true,
+      };
       return next();
     }
 
@@ -72,12 +83,32 @@ export class ServiceTicketMiddleware implements NestMiddleware {
         ),
       );
 
-      if (response.status >= 200 && response.status < 300) {
-        (req as ServiceTicketRequest).serviceTicket = ticket;
-        next();
-      } else {
+      if (response.status < 200 || response.status >= 300) {
         throw new UnauthorizedException('Service ticket verification failed');
       }
+
+      const body: any = response.data ?? {};
+      const iamUser =
+        body?.data ?? body?.user ?? null;
+
+      const configuredFallbackUserId =
+        this.configService.get<string>('SERVICE_TICKET_USER_ID') || 'system';
+
+      const resolvedUserId =
+        iamUser?.id ||
+        iamUser?.userId ||
+        body?.userId ||
+        body?.id ||
+        configuredFallbackUserId;
+
+      const reqWithTicket = req as ServiceTicketRequest;
+      reqWithTicket.serviceTicket = ticket;
+      reqWithTicket.user = {
+        id: resolvedUserId,
+        ...(iamUser || {}),
+      };
+
+      next();
     } catch (error: any) {
       if (error instanceof UnauthorizedException) throw error;
       this.logger.warn(

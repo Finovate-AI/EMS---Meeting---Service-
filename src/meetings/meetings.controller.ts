@@ -24,9 +24,12 @@ import {
   CreateMeetingDto,
   UpdateMeetingDto,
   AddParticipantDto,
-  UpdateParticipantDto,
   MeetingResponseDto,
 } from './dto';
+import {
+  CurrentServiceUser,
+  ServiceUserContext,
+} from '../common/decorators/service-user.decorator';
 
 @ApiTags('meetings')
 @ApiSecurity('x-service-ticket')
@@ -63,20 +66,26 @@ export class MeetingsController {
       },
     },
   })
-  async create(@Body() createMeetingDto: CreateMeetingDto): Promise<MeetingResponseDto> {
-    return this.meetingsService.create(createMeetingDto);
+  async create(
+    @Body() createMeetingDto: CreateMeetingDto,
+    @CurrentServiceUser() user?: ServiceUserContext,
+  ): Promise<MeetingResponseDto> {
+    return this.meetingsService.create(createMeetingDto, user?.id);
   }
 
   @Get()
   @ApiOperation({
-    summary: 'Get all meetings',
-    description: 'Returns meetings where the user is creator, participant, or organizer. Optional filter by status. Ordered by start time (newest first).',
+    summary: 'Get meetings for current service user',
+    description: 'Returns meetings created by the configured service user (SERVICE_TICKET_USER_ID). Optional filter by status. Ordered by start time (newest first).',
   })
   @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'SCHEDULED', 'CANCELLED'], description: 'Filter by meeting status' })
   @ApiResponse({ status: 200, description: 'List of meetings', type: [MeetingResponseDto] })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findAll(@Query('status') status?: string): Promise<MeetingResponseDto[]> {
-    return this.meetingsService.findAll(status);
+  async findAll(
+    @Query('status') status?: string,
+    @CurrentServiceUser() user?: ServiceUserContext,
+  ): Promise<MeetingResponseDto[]> {
+    return this.meetingsService.findAll(status, user?.id);
   }
 
   @Get(':id/participants')
@@ -89,8 +98,11 @@ export class MeetingsController {
   @ApiResponse({ status: 403, description: 'No access to this meeting' })
   @ApiResponse({ status: 404, description: 'Meeting not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getParticipants(@Param('id') id: string) {
-    return this.meetingsService.getParticipants(id);
+  async getParticipants(
+    @Param('id') id: string,
+    @CurrentServiceUser() user?: ServiceUserContext,
+  ) {
+    return this.meetingsService.getParticipants(id, user?.id);
   }
 
   @Get(':id')
@@ -103,8 +115,11 @@ export class MeetingsController {
   @ApiResponse({ status: 404, description: 'Meeting not found' })
   @ApiResponse({ status: 403, description: 'No access to this meeting' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findOne(@Param('id') id: string): Promise<MeetingResponseDto> {
-    return this.meetingsService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @CurrentServiceUser() user?: ServiceUserContext,
+  ): Promise<MeetingResponseDto> {
+    return this.meetingsService.findOne(id, user?.id);
   }
 
   @Patch(':id')
@@ -124,8 +139,9 @@ export class MeetingsController {
   async update(
     @Param('id') id: string,
     @Body() updateMeetingDto: UpdateMeetingDto,
+    @CurrentServiceUser() user?: ServiceUserContext,
   ): Promise<MeetingResponseDto> {
-    return this.meetingsService.update(id, updateMeetingDto);
+    return this.meetingsService.update(id, updateMeetingDto, user?.id);
   }
 
   @Delete(':id')
@@ -139,8 +155,11 @@ export class MeetingsController {
   @ApiResponse({ status: 403, description: 'Only organizers can delete' })
   @ApiResponse({ status: 404, description: 'Meeting not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async remove(@Param('id') id: string): Promise<void> {
-    return this.meetingsService.remove(id);
+  async remove(
+    @Param('id') id: string,
+    @CurrentServiceUser() user?: ServiceUserContext,
+  ): Promise<void> {
+    return this.meetingsService.remove(id, user?.id);
   }
 
   @Post(':id/cancel')
@@ -174,39 +193,9 @@ export class MeetingsController {
   async addParticipant(
     @Param('id') id: string,
     @Body() addParticipantDto: AddParticipantDto,
+    @CurrentServiceUser() user?: ServiceUserContext,
   ): Promise<MeetingResponseDto> {
-    return this.meetingsService.addParticipant(id, addParticipantDto);
-  }
-
-  @Patch(':id/participants/:participantId')
-  @ApiOperation({
-    summary: 'Update invitation response',
-    description: 'Accept, decline, or set tentative. Only the participant can update their own response (ACCEPTED, DECLINED, TENTATIVE).',
-  })
-  @ApiParam({ name: 'id', description: 'Meeting UUID' })
-  @ApiParam({ name: 'participantId', description: 'Participant record UUID' })
-  @ApiResponse({ status: 200, description: 'Response updated', type: MeetingResponseDto })
-  @ApiResponse({ status: 403, description: 'Can only update own response' })
-  @ApiResponse({ status: 404, description: 'Participant not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiBody({
-    type: UpdateParticipantDto,
-    examples: {
-      accept: { summary: 'Accept', value: { response: 'ACCEPTED' } },
-      decline: { summary: 'Decline', value: { response: 'DECLINED' } },
-      tentative: { summary: 'Tentative', value: { response: 'TENTATIVE' } },
-    },
-  })
-  async updateParticipant(
-    @Param('id') id: string,
-    @Param('participantId') participantId: string,
-    @Body() updateParticipantDto: UpdateParticipantDto,
-  ): Promise<MeetingResponseDto> {
-    return this.meetingsService.updateParticipant(
-      id,
-      participantId,
-      updateParticipantDto,
-    );
+    return this.meetingsService.addParticipant(id, addParticipantDto, user?.id);
   }
 
   @Delete(':id/participants/:participantId')
@@ -224,7 +213,8 @@ export class MeetingsController {
   async removeParticipant(
     @Param('id') id: string,
     @Param('participantId') participantId: string,
+    @CurrentServiceUser() user?: ServiceUserContext,
   ): Promise<void> {
-    return this.meetingsService.removeParticipant(id, participantId);
+    return this.meetingsService.removeParticipant(id, participantId, user?.id);
   }
 }
