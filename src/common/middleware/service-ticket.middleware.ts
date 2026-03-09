@@ -44,6 +44,13 @@ export class ServiceTicketMiddleware implements NestMiddleware {
       throw new UnauthorizedException('X-Service-Ticket header is required');
     }
 
+    // Master service ticket key (bypasses remote validation and does not expire)
+    const masterKey = this.configService.get<string>('SERVICE_TICKET_KEY');
+    if (masterKey && ticket === masterKey) {
+      (req as ServiceTicketRequest).serviceTicket = ticket;
+      return next();
+    }
+
     const verifyUrl =
       this.configService.get<string>('TICKET_VERIFY_URL') ||
       'http://iamauth.runasp.net/api/ticket/verify';

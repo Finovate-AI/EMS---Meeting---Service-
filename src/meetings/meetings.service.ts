@@ -30,19 +30,25 @@ export class MeetingsService {
     private readonly zoomService: ZoomService,
   ) {}
 
+  private getDefaultUserId(): string {
+    return process.env.SERVICE_TICKET_USER_ID || 'system';
+  }
+
   async create(createMeetingDto: CreateMeetingDto): Promise<MeetingResponseDto> {
     const { participants, organizers, ...meetingData } = createMeetingDto;
+
+    const defaultUserId = this.getDefaultUserId();
 
     // Ensure at least one organizer exists (no auth, so we don't track current user)
     const meetingOrganizers = organizers || [];
     if (meetingOrganizers.length === 0) {
-      meetingOrganizers.push({ userId: 'system' });
+      meetingOrganizers.push({ userId: defaultUserId });
     }
 
     const meeting = await this.prisma.meeting.create({
       data: {
         ...meetingData,
-        createdBy: 'system',
+        createdBy: defaultUserId,
         status: meetingData.status || 'DRAFT',
         participants: participants
           ? {
