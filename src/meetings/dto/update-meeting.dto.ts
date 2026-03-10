@@ -21,9 +21,4 @@ export class UpdateMeetingDto {
   @IsDateString()
   @IsOptional()
   endTime?: string;
-
-  @ApiPropertyOptional({ description: 'Meeting status', enum: ['DRAFT', 'SCHEDULED', 'CANCELLED'], example: 'SCHEDULED' })
-  @IsOptional()
-  @IsIn(['DRAFT', 'SCHEDULED', 'CANCELLED'])
-  status?: string;
 }

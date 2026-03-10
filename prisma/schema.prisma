@@ -13,42 +13,40 @@ datasource db {
 // SQL Server doesn't support enums, using String instead
 
 model Meeting {
-  id          String         @id @default(uuid())
+  id          String   @id @default(uuid())
   title       String
   description String?
   startTime   DateTime
   endTime     DateTime
-  status      String         @default("DRAFT") @db.VarChar(20)
-  createdBy   String         // userId from Auth Service
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  
-  // Zoom integration fields
-  zoomMeetingId    String?    @db.VarChar(100)
-  zoomJoinUrl      String?    @db.VarChar(500)
-  zoomStartUrl     String?    @db.VarChar(500)
-  zoomPassword     String?    @db.VarChar(50)
+  createdBy   String // userId from Auth Service
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  participants    MeetingParticipant[]
-  organizers      MeetingOrganizer[]
-  agendaItems     MeetingAgendaItem[]
-  minutes         MeetingMinutes?
-  actionItems     ActionItem[]
+  // Zoom integration fields
+  zoomMeetingId String? @db.VarChar(100)
+  zoomJoinUrl   String? @db.VarChar(500)
+  zoomStartUrl  String? @db.VarChar(500)
+  zoomPassword  String? @db.VarChar(50)
+
+  participants MeetingParticipant[]
+  organizers   MeetingOrganizer[]
+  agendaItems  MeetingAgendaItem[]
+  minutes      MeetingMinutes?
+  actionItems  ActionItem[]
 
   @@index([createdBy])
-  @@index([status])
   @@index([startTime])
 }
 
 model MeetingParticipant {
-  id         String             @id @default(uuid())
-  meetingId  String
-  userId     String             // userId from Auth Service
-  response   String?         @db.VarChar(20)
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  id        String   @id @default(uuid())
+  meetingId String
+  userId    String // userId from Auth Service
+  response  String?  @db.VarChar(20)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  meeting    Meeting            @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, userId])
   @@index([meetingId])
@@ -58,10 +56,10 @@ model MeetingParticipant {
 model MeetingOrganizer {
   id        String   @id @default(uuid())
   meetingId String
-  userId    String   // userId from Auth Service
+  userId    String // userId from Auth Service
   createdAt DateTime @default(now())
 
-  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, userId])
   @@index([meetingId])
@@ -73,12 +71,12 @@ model MeetingAgendaItem {
   meetingId       String
   title           String
   durationMinutes Int?
-  ownerUserId     String?  // userId from Auth Service
+  ownerUserId     String? // userId from Auth Service
   order           Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
 }
@@ -91,22 +89,22 @@ model MeetingMinutes {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
 }
 
 model ActionItem {
-  id              String          @id @default(uuid())
-  meetingId       String
-  title           String
-  assignedToUserId String         // userId from Auth Service
-  dueDate         DateTime?
-  status          String           @default("PENDING") @db.VarChar(20)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id               String    @id @default(uuid())
+  meetingId        String
+  title            String
+  assignedToUserId String // userId from Auth Service
+  dueDate          DateTime?
+  status           String    @default("PENDING") @db.VarChar(20)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  meeting         Meeting         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
   @@index([assignedToUserId])

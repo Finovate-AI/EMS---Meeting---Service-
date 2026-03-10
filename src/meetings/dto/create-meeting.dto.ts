@@ -37,11 +37,6 @@ export class CreateMeetingDto {
   @IsNotEmpty()
   endTime: string;
 
-  @ApiPropertyOptional({ description: 'Meeting status', enum: ['DRAFT', 'SCHEDULED', 'CANCELLED'], example: 'DRAFT' })
-  @IsOptional()
-  @IsIn(['DRAFT', 'SCHEDULED', 'CANCELLED'])
-  status?: string;
-
   @ApiPropertyOptional({ description: 'List of participants to invite', type: [CreateParticipantDto], example: [{ userId: 'user-uuid-123' }] })
   @IsArray()
   @IsOptional()

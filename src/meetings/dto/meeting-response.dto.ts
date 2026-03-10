@@ -90,8 +90,6 @@ export class MeetingResponseDto {
   startTime: Date;
   @ApiProperty({ example: '2026-02-20T11:00:00.000Z' })
   endTime: Date;
-  @ApiProperty({ enum: ['DRAFT', 'SCHEDULED', 'CANCELLED'], example: 'SCHEDULED' })
-  status: string;
   @ApiProperty({ description: 'Creator user ID', example: 'user-uuid-creator' })
   createdBy: string;
   @ApiProperty()

@@ -35,7 +35,7 @@ import {
 @ApiSecurity('x-service-ticket')
 @Controller('meetings')
 export class MeetingsController {
-  constructor(private readonly meetingsService: MeetingsService) {}
+  constructor(private readonly meetingsService: MeetingsService) { }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -82,10 +82,9 @@ export class MeetingsController {
   @ApiResponse({ status: 200, description: 'List of meetings', type: [MeetingResponseDto] })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findAll(
-    @Query('status') status?: string,
     @CurrentServiceUser() user?: ServiceUserContext,
   ): Promise<MeetingResponseDto[]> {
-    return this.meetingsService.findAll(status, user?.id);
+    return this.meetingsService.findAll(user?.id);
   }
 
   @Get(':id/participants')
@@ -174,7 +173,7 @@ export class MeetingsController {
   @ApiResponse({ status: 404, description: 'Meeting not found' })
   @ApiResponse({ status: 400, description: 'Meeting already cancelled' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async cancel(@Param('id') id: string): Promise<MeetingResponseDto> {
+  async cancel(@Param('id') id: string): Promise<void> {
     return this.meetingsService.cancel(id);
   }
 

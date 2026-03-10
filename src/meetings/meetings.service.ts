@@ -14,11 +14,6 @@ import {
   MeetingResponseDto,
 } from './dto';
 // Enums converted to string constants for SQL Server compatibility
-const MeetingStatus = {
-  DRAFT: 'DRAFT',
-  SCHEDULED: 'SCHEDULED',
-  CANCELLED: 'CANCELLED',
-} as const;
 
 @Injectable()
 export class MeetingsService {
@@ -27,7 +22,7 @@ export class MeetingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly zoomService: ZoomService,
-  ) {}
+  ) { }
 
   private getDefaultUserId(): string {
     return process.env.SERVICE_TICKET_USER_ID || 'system';
@@ -55,14 +50,13 @@ export class MeetingsService {
       data: {
         ...meetingData,
         createdBy: defaultUserId,
-        status: meetingData.status || 'DRAFT',
         participants: participants
           ? {
-              create: participants.map((p) => ({
-                userId: p.userId,
-                response: 'ACCEPTED',
-              })),
-            }
+            create: participants.map((p) => ({
+              userId: p.userId,
+              response: 'ACCEPTED',
+            })),
+          }
           : undefined,
         organizers: {
           create: meetingOrganizers.map((o) => ({
@@ -79,67 +73,58 @@ export class MeetingsService {
       },
     });
 
-    // Create Zoom meeting if status is SCHEDULED
-    if (meeting.status === 'SCHEDULED') {
-      try {
-        const durationMinutes = Math.round(
-          (new Date(meeting.endTime).getTime() - new Date(meeting.startTime).getTime()) / 60000,
-        );
+    // Create Zoom meeting automatically since status is removed
+    try {
+      const durationMinutes = Math.round(
+        (new Date(meeting.endTime).getTime() - new Date(meeting.startTime).getTime()) / 60000,
+      );
 
-        const zoomMeeting = await this.zoomService.createMeeting({
-          topic: meeting.title,
-          type: 2, // Scheduled meeting
-          start_time: meeting.startTime.toISOString(),
-          duration: durationMinutes,
-          settings: {
-            host_video: true,
-            participant_video: true,
-            join_before_host: false,
-            mute_upon_entry: false,
-            waiting_room: false,
-          },
-        });
+      const zoomMeeting = await this.zoomService.createMeeting({
+        topic: meeting.title,
+        type: 2, // Scheduled meeting
+        start_time: meeting.startTime.toISOString(),
+        duration: durationMinutes,
+        settings: {
+          host_video: true,
+          participant_video: true,
+          join_before_host: false,
+          mute_upon_entry: false,
+          waiting_room: false,
+        },
+      });
 
-        // Update meeting with Zoom data
-        const updatedMeeting = await this.prisma.meeting.update({
-          where: { id: meeting.id },
-          data: {
-            zoomMeetingId: zoomMeeting.id,
-            zoomJoinUrl: zoomMeeting.join_url,
-            zoomStartUrl: zoomMeeting.start_url,
-            zoomPassword: zoomMeeting.password,
-          },
-          include: {
-            participants: true,
-            organizers: true,
-            agendaItems: true,
-            minutes: true,
-            actionItems: true,
-          },
-        });
+      // Update meeting with Zoom data
+      const updatedMeeting = await this.prisma.meeting.update({
+        where: { id: meeting.id },
+        data: {
+          zoomMeetingId: zoomMeeting.id,
+          zoomJoinUrl: zoomMeeting.join_url,
+          zoomStartUrl: zoomMeeting.start_url,
+          zoomPassword: zoomMeeting.password,
+        },
+        include: {
+          participants: true,
+          organizers: true,
+          agendaItems: true,
+          minutes: true,
+          actionItems: true,
+        },
+      });
 
-        this.logger.log(`Zoom meeting created for meeting ${meeting.id}: ${zoomMeeting.id}`);
-        return this.mapToResponseDto(updatedMeeting);
-      } catch (error) {
-        this.logger.error(`Failed to create Zoom meeting for ${meeting.id}:`, error.message);
-        // Continue without Zoom - meeting is still created
-        // You can optionally throw or handle differently
-      }
+      this.logger.log(`Zoom meeting created for meeting ${meeting.id}: ${zoomMeeting.id}`);
+      return this.mapToResponseDto(updatedMeeting);
+    } catch (error) {
+      this.logger.error(`Failed to create Zoom meeting for ${meeting.id}:`, error.message);
+      // Continue without Zoom - meeting is still created
     }
 
     return this.mapToResponseDto(meeting);
   }
 
-  async findAll(
-    status?: string,
-    userId?: string,
-  ): Promise<MeetingResponseDto[]> {
+  async findAll(userId?: string): Promise<MeetingResponseDto[]> {
     const where: any = {
       createdBy: this.resolveUserId(userId),
     };
-    if (status && ['DRAFT', 'SCHEDULED', 'CANCELLED'].includes(status)) {
-      where.status = status;
-    }
     const meetings = await this.prisma.meeting.findMany({
       where,
       include: {
@@ -193,13 +178,7 @@ export class MeetingsService {
       throw new NotFoundException(`Meeting with ID ${id} not found`);
     }
 
-    // Check if status is being changed to SCHEDULED and meeting doesn't have Zoom meeting yet
-    const oldStatus = meeting.status;
-    const newStatus = updateMeetingDto.status;
-    const shouldCreateZoom =
-      newStatus === 'SCHEDULED' &&
-      oldStatus !== 'SCHEDULED' &&
-      !meeting.zoomMeetingId;
+    const shouldCreateZoom = !meeting.zoomMeetingId;
 
     const updatedMeeting = await this.prisma.meeting.update({
       where: { id },
@@ -213,13 +192,13 @@ export class MeetingsService {
       },
     });
 
-    // Create Zoom meeting if status changed to SCHEDULED
+    // Create Zoom meeting if it doesn't have one
     if (shouldCreateZoom) {
       try {
         const durationMinutes = Math.round(
           (new Date(updatedMeeting.endTime).getTime() -
             new Date(updatedMeeting.startTime).getTime()) /
-            60000,
+          60000,
         );
 
         const zoomMeeting = await this.zoomService.createMeeting({
@@ -265,33 +244,9 @@ export class MeetingsService {
     return this.mapToResponseDto(updatedMeeting);
   }
 
-  async cancel(id: string, userId?: string): Promise<MeetingResponseDto> {
-    const meeting = await this.prisma.meeting.findFirst({
-      where: { id, createdBy: this.resolveUserId(userId) },
-      include: { organizers: true },
-    });
-
-    if (!meeting) {
-      throw new NotFoundException(`Meeting with ID ${id} not found`);
-    }
-
-    if (meeting.status === 'CANCELLED') {
-      throw new BadRequestException('Meeting is already cancelled');
-    }
-
-    const updatedMeeting = await this.prisma.meeting.update({
-      where: { id },
-      data: { status: 'CANCELLED' },
-      include: {
-        participants: true,
-        organizers: true,
-        agendaItems: true,
-        minutes: true,
-        actionItems: true,
-      },
-    });
-
-    return this.mapToResponseDto(updatedMeeting);
+  async cancel(id: string, userId?: string): Promise<void> {
+    // With status removed, we can just remove the meeting instead of cancelling
+    return this.remove(id, userId);
   }
 
   async addParticipant(
@@ -401,7 +356,6 @@ export class MeetingsService {
       description: meeting.description,
       startTime: meeting.startTime,
       endTime: meeting.endTime,
-      status: meeting.status,
       createdBy: meeting.createdBy,
       createdAt: meeting.createdAt,
       updatedAt: meeting.updatedAt,
@@ -434,13 +388,13 @@ export class MeetingsService {
       })),
       minutes: meeting.minutes
         ? {
-            id: meeting.minutes.id,
-            meetingId: meeting.minutes.meetingId,
-            notes: meeting.minutes.notes,
-            decisions: meeting.minutes.decisions,
-            createdAt: meeting.minutes.createdAt,
-            updatedAt: meeting.minutes.updatedAt,
-          }
+          id: meeting.minutes.id,
+          meetingId: meeting.minutes.meetingId,
+          notes: meeting.minutes.notes,
+          decisions: meeting.minutes.decisions,
+          createdAt: meeting.minutes.createdAt,
+          updatedAt: meeting.minutes.updatedAt,
+        }
         : undefined,
       actionItems: meeting.actionItems?.map((a: any) => ({
         id: a.id,
